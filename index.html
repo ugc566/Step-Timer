@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Time Steps</title>
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg">
+<meta name="theme-color" content="#0f766e">
+<style>
+:root{box-sizing:border-box;--bg:#f6f7f5;--card:#fff;--tx:#14201e;--mut:#66726f;--ac:#0f766e;--ac2:#ccefe9;--bd:#e1e5e3;--warn:#c2410c;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0e1514;--card:#16201f;--tx:#e8f0ee;--mut:#8da09c;--ac:#2dd4bf;--ac2:#134e48;--bd:#25322f;--warn:#fb923c}}
+*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,sans-serif;max-width:480px;margin:auto;padding:12px 14px 80px}
+h1{font-size:20px;margin:6px 0 12px}.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px;margin-bottom:12px}
+.mut{color:var(--mut);font-size:13px}.big{font-size:44px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer}#go{width:100%;padding:18px;font-size:20px;font-weight:700;border:0;border-radius:14px;background:var(--ac);color:var(--bg);margin-top:10px}#go.stop{background:var(--warn);color:#fff}
+.bar{height:12px;background:var(--ac2);border-radius:8px;overflow:hidden;margin:8px 0 4px}.bar i{display:block;height:100%;background:var(--ac);width:0}
+.row{display:flex;gap:8px}.row label{flex:1;font-size:13px;color:var(--mut)}input{width:100%;font:inherit;padding:8px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx)}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;max-width:480px;margin:auto;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;padding:14px;border:0;background:none;color:var(--mut);font-weight:600}nav button.on{color:var(--ac)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}.chip{flex:none;padding:7px 13px;border:1px solid var(--bd);border-radius:20px;background:var(--card)}.chip.on{background:var(--ac);color:var(--bg);border-color:var(--ac)}
+.seg{display:flex;border:1px solid var(--bd);border-radius:12px;overflow:hidden;margin:8px 0}.seg button{flex:1;padding:8px;border:0;background:var(--card)}.seg button.on{background:var(--ac2);font-weight:700}
+.stats{display:flex;justify-content:space-around;text-align:center;margin-top:8px}.stats b{display:block;font-size:20px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:8px}.grid i{font-style:normal;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:10px;font-size:12px;background:var(--bg);color:var(--mut)}
+.grid .dow{background:none;aspect-ratio:auto}.grid .part{background:var(--ac2);color:var(--tx)}.grid .ok{background:var(--ac);color:var(--bg);font-weight:700}.grid .ok b{font-size:15px;line-height:1}.grid .now{outline:2px solid var(--tx)}
+.calh{display:flex;justify-content:space-between;align-items:center}.calh button{border:1px solid var(--bd);background:var(--card);border-radius:10px;padding:4px 14px;font-size:18px}
+svg text{fill:var(--mut);font-size:10px}.hide{display:none}
+</style></head><body>
+<section id="p1">
+<h1>Time Steps</h1>
+<div class="card"><div class="mut" style="text-align:center">Elapsed</div><div class="big" id="clock">00:00:00</div>
+<div class="mut" style="text-align:center">≈ <b id="live" style="color:var(--tx)">0</b> steps</div>
+<button id="go">Start Workout</button></div>
+<div class="card"><b>Today</b><div class="bar"><i id="tb"></i></div><div class="mut" id="tt"></div></div>
+<div class="card"><b>Settings</b><div class="row" style="margin-top:8px"><label>Steps per minute<input id="rate" type="number" min="1" inputmode="numeric"></label><label>Daily goal<input id="goal" type="number" min="1" inputmode="numeric"></label></div>
+<p class="mut">Steps = minutes walked × steps per minute. Time is saved as a start timestamp, so the screen can lock or the app can close and your session is still counted. Everything stays on this device.</p></div>
+</section>
+<section id="p2" class="hide">
+<h1>Progress</h1>
+<div class="chips" id="chips"></div>
+<div class="row hide" id="cust"><label>From<input id="from" type="date"></label><label>To<input id="to" type="date"></label></div>
+<div class="seg" id="seg"></div>
+<div class="card" id="out"></div>
+</section>
+<nav><button id="n1" class="on">Timer</button><button id="n2">Progress</button></nav>
+<script>
+const K='vsc1';let S={sessions:[],rate:100,goal:10000,start:null};
+try{Object.assign(S,JSON.parse(localStorage.getItem(K)||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
+const $=s=>document.querySelector(s),fmt=n=>Math.round(n).toLocaleString();
+const D=(y,m,d)=>new Date(y,m,d),day0=(t=Date.now())=>{const x=new Date(t);return D(x.getFullYear(),x.getMonth(),x.getDate())};
+const addD=(d,n)=>D(d.getFullYear(),d.getMonth(),d.getDate()+n);
+const sum=(a,b)=>S.sessions.reduce((t,x)=>x.s>=+a&&x.s<+b?t+x.n:t,0);
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+let filt='day',view='ring',calM=D(day0().getFullYear(),day0().getMonth(),1);
+const FL=[['day','Daily'],['week','Weekly'],['month','Monthly'],['year','Annually'],['all','All time'],['custom','Custom']],VL=[['ring','Progress'],['bars','Graph'],['cal','Calendar']];
+function range(){const t=day0(),y=t.getFullYear(),m=t.getMonth();
+if(filt=='day')return[t,addD(t,1)];
+if(filt=='week'){const a=addD(t,-((t.getDay()+6)%7));return[a,addD(a,7)]}
+if(filt=='month')return[D(y,m,1),D(y,m+1,1)];
+if(filt=='year')return[D(y,0,1),D(y+1,0,1)];
+if(filt=='all'){const f=S.sessions.length?day0(Math.min(...S.sessions.map(x=>x.s))):t;return[f,addD(t,1)]}
+const a=new Date($('#from').value+'T00:00'),b=new Date($('#to').value+'T00:00');
+return(isNaN(a)||isNaN(b)||b<a)?[t,addD(t,1)]:[a,addD(b,1)]}
+function buckets(a,b){const n=Math.round((b-a)/864e5),o=[];
+if(filt=='day'){for(let h=0;h<24;h++)o.push([new Date(+a+h*36e5),new Date(+a+(h+1)*36e5),h])}
+else if(filt=='year'||n>62){for(let d=D(a.getFullYear(),a.getMonth(),1);d<b;d=D(d.getFullYear(),d.getMonth()+1,1))o.push([d,D(d.getFullYear(),d.getMonth()+1,1),d.toLocaleString([],{month:'short'})])}
+else for(let d=a;d<b;d=addD(d,1))o.push([d,addD(d,1),filt=='week'?d.toLocaleString([],{weekday:'short'}):d.getDate()]);
+return o}
+function bars(a,b){const bs=buckets(a,b).map(([s,e,l])=>({v:sum(s<a?a:s,e>b?b:e),l,g:filt!='day'&&e-s<=9e7}));
+const hasG=bs.some(x=>x.g),mx=Math.max(1,...bs.map(x=>x.v),hasG?S.goal:0),n=bs.length,W=340,H=170,bw=W/n,st=Math.ceil(n/12);
+let s=`<svg viewBox="0 0 ${W} ${H+18}" width="100%">`;
+bs.forEach((x,i)=>{const h=x.v/mx*H;s+=`<rect x="${i*bw+bw*.15}" y="${H-h}" width="${bw*.7}" height="${h}" rx="3" fill="var(--ac)" opacity="${x.g&&x.v>=S.goal?1:.6}"/>`;if(i%st==0)s+=`<text x="${i*bw+bw/2}" y="${H+13}" text-anchor="middle">${x.l}</text>`});
+if(hasG){const y=H-S.goal/mx*H;s+=`<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="var(--warn)" stroke-dasharray="4 3"/><text x="2" y="${y-3}">goal</text>`}
+return s+'</svg>'}
+function cal(){const y=calM.getFullYear(),m=calM.getMonth(),f=(D(y,m,1).getDay()+6)%7,dim=D(y,m+1,0).getDate(),t=day0();
+let h=`<div class="calh"><button data-a="pm">‹</button><b>${calM.toLocaleString([],{month:'long',year:'numeric'})}</b><button data-a="nm">›</button></div><div class="grid">`+'MTWTFSS'.split('').map(c=>`<i class="dow">${c}</i>`).join('')+'<i style="background:none"></i>'.repeat(f);
+for(let d=1;d<=dim;d++){const dt=D(y,m,d),v=sum(dt,addD(dt,1)),ok=v>=S.goal;h+=`<i class="${ok?'ok':v?'part':''}${+dt==+t?' now':''}" title="${fmt(v)} steps">${ok?'<b>✓</b>':''}${d}</i>`}
+let k=0,c=+t;if(sum(new Date(c),addD(new Date(c),1))<S.goal)c=+addD(t,-1);
+while(sum(new Date(c),addD(new Date(c),1))>=S.goal){k++;c=+addD(new Date(c),-1)}
+return h+`</div><p class="mut">Goal days get a ✓. Current streak: <b style="color:var(--tx)">${k} day${k==1?'':'s'}</b></p>`}
+function render(){
+$('#chips').innerHTML=FL.map(([k,l])=>`<button class="chip${k==filt?' on':''}" data-f="${k}">${l}</button>`).join('');
+$('#seg').innerHTML=VL.map(([k,l])=>`<button class="${k==view?'on':''}" data-v="${k}">${l}</button>`).join('');
+$('#cust').classList.toggle('hide',filt!='custom');
+const[a,b]=range(),days=Math.max(1,Math.round((b-a)/864e5)),tot=sum(a,b),t1=addD(day0(),1),eff=Math.max(1,Math.round(((b<t1?b:t1)-a)/864e5)),tgt=S.goal*days,p=Math.min(1,tot/tgt);
+let h=`<div class="stats"><div><b>${fmt(tot)}</b><span class="mut">total</span></div><div><b>${fmt(tot/eff)}</b><span class="mut">avg / day</span></div></div>`;
+if(view=='ring'){const C=2*Math.PI*52;h=`<svg viewBox="0 0 130 130" width="190" style="display:block;margin:auto"><circle cx="65" cy="65" r="52" fill="none" stroke="var(--ac2)" stroke-width="12"/><circle cx="65" cy="65" r="52" fill="none" stroke="var(--ac)" stroke-width="12" stroke-linecap="round" stroke-dasharray="${C*p} ${C}" transform="rotate(-90 65 65)"/><text x="65" y="68" text-anchor="middle" style="font-size:24px;font-weight:700;fill:var(--tx)">${Math.round(tot/tgt*100)}%</text></svg><div class="bar"><i style="width:${p*100}%"></i></div><p style="text-align:center;margin:4px 0"><b>${fmt(tot)} / ${fmt(tgt)}</b> steps</p><p class="mut" style="text-align:center;margin:0">Target = ${fmt(S.goal)} × ${days} day${days>1?'s':''}</p>`+h}
+else if(view=='bars')h=bars(a,b)+h;else h=cal()+h;
+$('#out').innerHTML=h}
+$('#chips').onclick=e=>{const f=e.target.dataset.f;if(f){filt=f;render()}};
+$('#seg').onclick=e=>{const v=e.target.dataset.v;if(v){view=v;render()}};
+$('#out').onclick=e=>{const a=e.target.dataset.a;if(a){calM=D(calM.getFullYear(),calM.getMonth()+(a=='nm'?1:-1),1);render()}};
+$('#from').onchange=$('#to').onchange=render;
+$('#from').value=iso(D(day0().getFullYear(),day0().getMonth(),1));$('#to').value=iso(day0());
+function tick(){const run=S.start!=null,el=run?Date.now()-S.start:0,s=Math.floor(el/1e3);
+$('#go').textContent=run?'Stop Workout':'Start Workout';$('#go').className=run?'stop':'';
+$('#clock').textContent=[s/3600|0,(s/60|0)%60,s%60].map(x=>String(x).padStart(2,'0')).join(':');
+$('#live').textContent=fmt(Math.floor(el/6e4*S.rate));
+const t=sum(day0(),addD(day0(),1));$('#tb').style.width=Math.min(100,t/S.goal*100)+'%';$('#tt').textContent=fmt(t)+' / '+fmt(S.goal)+' steps ('+Math.round(t/S.goal*100)+'%)'}
+$('#go').onclick=()=>{if(S.start==null)S.start=Date.now();else{const e=Date.now(),n=Math.floor((e-S.start)/6e4*S.rate);if(n>0)S.sessions.push({s:S.start,e,n});S.start=null}save();tick()};
+$('#rate').value=S.rate;$('#goal').value=S.goal;
+$('#rate').onchange=()=>{S.rate=Math.max(1,+$('#rate').value||100);$('#rate').value=S.rate;save();tick()};
+$('#goal').onchange=()=>{S.goal=Math.max(1,+$('#goal').value||10000);$('#goal').value=S.goal;save();tick()};
+function tab(n){$('#p1').classList.toggle('hide',n!=1);$('#p2').classList.toggle('hide',n!=2);$('#n1').classList.toggle('on',n==1);$('#n2').classList.toggle('on',n==2);if(n==2)render()}
+$('#n1').onclick=()=>tab(1);$('#n2').onclick=()=>tab(2);
+setInterval(tick,1e3);document.addEventListener('visibilitychange',tick);tick();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
